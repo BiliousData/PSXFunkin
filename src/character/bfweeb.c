@@ -4,13 +4,17 @@
   file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
-#include "bf.h"
+#include "boot/character.h"
+#include "boot/mem.h"
+#include "boot/archive.h"
+#include "boot/stage.h"
+#include "boot/random.h"
+#include "boot/main.h"
 
-#include "../mem.h"
-#include "../archive.h"
-#include "../stage.h"
-#include "../random.h"
-#include "../main.h"
+//Boyfriend player assets
+static u8 char_bf_arc_weeb[] = {
+	#include "iso/bf/weeb.arc.h"
+};
 
 //Boyfriend skull fragments
 static SkullFragment char_bfweeb_skull[15] = {
@@ -122,14 +126,6 @@ static const Animation char_bfweeb_anim[PlayerAnim_Max] = {
 	
 	{2, (const u8[]){20, 21, 22, ASCR_BACK, 1}},        //PlayerAnim_Peace
 	{2, (const u8[]){ASCR_CHGANI, CharAnim_Idle}},      //PlayerAnim_Sweat
-	
-	{2, (const u8[]){ 0,  1,  2,  3, 4, ASCR_BACK, 1}}, //CharAnim_Idle
-	{2, (const u8[]){ 0,  1,  2,  3, 4, ASCR_BACK, 1}}, //CharAnim_Idle
-	{2, (const u8[]){ 0,  1,  2,  3, 4, ASCR_BACK, 1}}, //CharAnim_Idle
-	{2, (const u8[]){ 0,  1,  2,  3, 4, ASCR_BACK, 1}}, //CharAnim_Idle
-	{2, (const u8[]){ 0,  1,  2,  3, 4, ASCR_BACK, 1}}, //CharAnim_Idle
-	{2, (const u8[]){ 0,  1,  2,  3, 4, ASCR_BACK, 1}}, //CharAnim_Idle
-	{2, (const u8[]){ 0,  1,  2,  3, 4, ASCR_BACK, 1}}, //CharAnim_Idle
 };
 
 //Boyfriend Weeb player functions
@@ -183,105 +179,6 @@ void Char_BFWeeb_Tick(Character *character)
 			character->set_anim(character, CharAnim_Idle);
 	}
 	
-	//Retry screen
-	if (character->animatable.anim >= PlayerAnim_Dead3)
-	{
-		//Tick skull fragments
-		if (this->skull_scale)
-		{
-			SkullFragment *frag = this->skull;
-			for (size_t i = 0; i < COUNT_OF_MEMBER(Char_BF, skull); i++, frag++)
-			{
-				//Draw fragment
-				RECT frag_src = {
-					(i & 1) ? 112 : 96,
-					(i >> 1) << 4,
-					16,
-					16
-				};
-				fixed_t skull_dim = (FIXED_DEC(16,1) * this->skull_scale) >> 6;
-				fixed_t skull_rad = skull_dim >> 1;
-				RECT_FIXED frag_dst = {
-					character->x + (((fixed_t)frag->x << FIXED_SHIFT) >> 3) - skull_rad - stage.camera.x,
-					character->y + (((fixed_t)frag->y << FIXED_SHIFT) >> 3) - skull_rad - stage.camera.y,
-					skull_dim,
-					skull_dim,
-				};
-				Stage_DrawTex(&this->tex_retry, &frag_src, &frag_dst, FIXED_MUL(stage.camera.zoom, stage.bump));
-				
-				//Move fragment
-				frag->x += frag->xsp;
-				frag->y += ++frag->ysp;
-			}
-			
-			//Decrease scale
-			this->skull_scale--;
-		}
-		
-		//Draw input options
-		u8 input_scale = 16 - this->skull_scale;
-		if (input_scale > 16)
-			input_scale = 0;
-		
-		RECT button_src = {
-			 0, 96,
-			16, 16
-		};
-		RECT_FIXED button_dst = {
-			character->x - FIXED_DEC(32,1) - stage.camera.x,
-			character->y - FIXED_DEC(88,1) - stage.camera.y,
-			(FIXED_DEC(16,1) * input_scale) >> 4,
-			FIXED_DEC(16,1),
-		};
-		
-		//Cross - Retry
-		Stage_DrawTex(&this->tex_retry, &button_src, &button_dst, FIXED_MUL(stage.camera.zoom, stage.bump));
-		
-		//Circle - Blueball
-		button_src.x = 16;
-		button_dst.y += FIXED_DEC(56,1);
-		Stage_DrawTex(&this->tex_retry, &button_src, &button_dst, FIXED_MUL(stage.camera.zoom, stage.bump));
-		
-		//Draw 'RETRY'
-		u8 retry_frame;
-		
-		if (character->animatable.anim == PlayerAnim_Dead6)
-		{
-			//Selected retry
-			retry_frame = 2 - (this->retry_bump >> 3);
-			if (retry_frame >= 3)
-				retry_frame = 0;
-			if (this->retry_bump & 2)
-				retry_frame += 3;
-			
-			if (++this->retry_bump == 0xFF)
-				this->retry_bump = 0xFD;
-		}
-		else
-		{
-			//Idle
-			retry_frame = 1 +  (this->retry_bump >> 2);
-			if (retry_frame >= 3)
-				retry_frame = 0;
-			
-			if (++this->retry_bump >= 55)
-				this->retry_bump = 0;
-		}
-		
-		RECT retry_src = {
-			(retry_frame & 1) ? 48 : 0,
-			(retry_frame >> 1) << 5,
-			48,
-			32
-		};
-		RECT_FIXED retry_dst = {
-			character->x -  FIXED_DEC(7,1) - stage.camera.x,
-			character->y - FIXED_DEC(92,1) - stage.camera.y,
-			FIXED_DEC(48,1),
-			FIXED_DEC(32,1),
-		};
-		Stage_DrawTex(&this->tex_retry, &retry_src, &retry_dst, FIXED_MUL(stage.camera.zoom, stage.bump));
-	}
 	
 	//Animate and draw character
 	Animatable_Animate(&character->animatable, (void*)this, Char_BFWeeb_SetFrame);
@@ -290,38 +187,6 @@ void Char_BFWeeb_Tick(Character *character)
 
 void Char_BFWeeb_SetAnim(Character *character, u8 anim)
 {
-	Char_BF *this = (Char_BF*)character;
-	
-	//Perform animation checks
-	switch (anim)
-	{
-		case PlayerAnim_Dead0:
-			//Begin reading dead.arc and adjust focus
-			//this->arc_dead = IO_AsyncReadFile(&this->file_dead_arc);
-			character->focus_x = FIXED_DEC(0,1);
-			character->focus_y = FIXED_DEC(-40,1);
-			character->focus_zoom = FIXED_DEC(125,100);
-			break;
-		case PlayerAnim_Dead2:
-			//Unload main.arc
-			Mem_Free(this->arc_main);
-			this->arc_main = this->arc_dead;
-			this->arc_dead = NULL;
-			
-			//Find dead.arc files
-			const char **pathp = (const char *[]){
-				"deadw0.tim", //BFWeeb_ArcDead_DeadW0
-				NULL
-			};
-			IO_Data *arc_ptr = this->arc_ptr;
-			for (; *pathp != NULL; pathp++)
-				*arc_ptr++ = Archive_Find(this->arc_main, *pathp);
-			
-			//Load retry art
-			//Gfx_LoadTex(&this->tex_retry, this->arc_ptr[BFWeeb_ArcDead_Retry], 0);
-			break;
-	}
-	
 	//Set animation
 	Animatable_SetAnim(&character->animatable, anim);
 	Character_CheckStartSing(character);
@@ -329,11 +194,7 @@ void Char_BFWeeb_SetAnim(Character *character, u8 anim)
 
 void Char_BFWeeb_Free(Character *character)
 {
-	Char_BF *this = (Char_BF*)character;
-	
-	//Free art
-	Mem_Free(this->arc_main);
-	Mem_Free(this->arc_dead);
+	(void)character;
 }
 
 Character *Char_BFWeeb_New(fixed_t x, fixed_t y)
@@ -365,10 +226,6 @@ Character *Char_BFWeeb_New(fixed_t x, fixed_t y)
 	this->character.focus_zoom = FIXED_DEC(2,1);
 	
 	//Load art
-	this->arc_main = IO_Read("\\CHAR\\BFWEEB.ARC;1");
-	this->arc_dead = NULL;
-	IO_FindFile(&this->file_dead_arc, "\\CHAR\\BFDEAD.ARC;1");
-	
 	const char **pathp = (const char *[]){
 		"weeb0.tim",  //BFWeeb_ArcMain_Weeb0
 		"weeb1.tim",  //BFWeeb_ArcMain_Weeb1
@@ -376,7 +233,7 @@ Character *Char_BFWeeb_New(fixed_t x, fixed_t y)
 	};
 	IO_Data *arc_ptr = this->arc_ptr;
 	for (; *pathp != NULL; pathp++)
-		*arc_ptr++ = Archive_Find(this->arc_main, *pathp);
+		*arc_ptr++ = Archive_Find((IO_Data)char_bf_arc_weeb, *pathp);
 	
 	//Initialize render state
 	this->tex_id = this->frame = 0xFF;
